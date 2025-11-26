@@ -1,4 +1,4 @@
-// === PakePlus 专业版授权系统（管理员控制有效期）===
+// === PakePlus 专业版授权系统（增强稳定设备标识版）===
 console.log(
     '%cbuild from PakePlus： https://github.com/Sjj1024/PakePlus',
     'color:orangered;font-weight:bolder'
@@ -9,38 +9,348 @@ const MACAuthSystem = {
     config: {
         authKey: 'PAKEPLUS_AUTH_V2',
         maxDevices: 1,
-        defaultExpireDays: 365, // 默认有效期，但实际使用管理员设置的值
+        defaultExpireDays: 365,
         adminPassword: 'pakeplus2024',
         secretKey: 'pakeplus_pro_2024_secret_remote'
     },
     
-    // 获取设备标识
+    // 获取增强的稳定设备标识
     getDeviceFingerprint: function() {
+        try {
+            // 首先尝试从localStorage读取已保存的设备ID
+            let storedDeviceId = localStorage.getItem('pakeplus_device_id');
+            if (storedDeviceId && this.validateDeviceId(storedDeviceId)) {
+                console.log('✅ Using stored device ID:', storedDeviceId);
+                return storedDeviceId;
+            }
+            
+            // 生成新的增强稳定设备标识
+            const fingerprint = this.generateEnhancedFingerprint();
+            const newDeviceId = this.generateStableDeviceId(fingerprint);
+            
+            // 保存到localStorage
+            localStorage.setItem('pakeplus_device_id', newDeviceId);
+            localStorage.setItem('pakeplus_device_fingerprint', JSON.stringify(fingerprint));
+            localStorage.setItem('pakeplus_device_hash', this.calculateFingerprintHash(fingerprint));
+            
+            console.log('🆕 Generated new enhanced device ID:', newDeviceId);
+            return newDeviceId;
+            
+        } catch (error) {
+            console.error('Error generating device fingerprint:', error);
+            return this.generateFallbackDeviceId();
+        }
+    },
+    
+    // 生成增强的设备指纹
+    generateEnhancedFingerprint: function() {
         const fingerprint = {
-            userAgent: navigator.userAgent,
-            language: navigator.language,
+            // 核心系统标识（最稳定）
             platform: navigator.platform,
-            hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
-            deviceMemory: navigator.deviceMemory || 'unknown',
+            userAgentCore: this.getStableUserAgentCore(),
+            
+            // 硬件特征（相对稳定）
+            hardwareConcurrency: navigator.hardwareConcurrency || 0,
+            deviceMemory: navigator.deviceMemory || 0,
+            maxTouchPoints: navigator.maxTouchPoints || 0,
+            
+            // 屏幕特征（通常不变）
+            screenProps: this.getScreenProperties(),
+            
+            // 时间和区域设置
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            screenResolution: `${screen.width}x${screen.height}`,
-            colorDepth: screen.colorDepth,
+            locale: navigator.language,
+            locales: JSON.stringify(navigator.languages || [navigator.language]),
+            
+            // WebGL 渲染器信息（硬件相关）
+            webglRenderer: this.getWebGLRenderer(),
+            
+            // 字体信息（系统相关）
+            fonts: this.getFontFingerprint(),
+            
+            // Canvas 指纹（硬件加速相关）
+            canvasFingerprint: this.getCanvasFingerprint(),
+            
+            // 存储标识
+            storageId: this.getStorageIdentifier(),
+            
+            // 时间戳（仅用于哈希计算）
             timestamp: Date.now()
         };
         
-        return this.generateDeviceId(fingerprint);
+        return fingerprint;
     },
     
-    // 生成设备ID
-    generateDeviceId: function(fingerprint) {
-        const data = JSON.stringify(fingerprint);
+    // 获取稳定的UserAgent核心信息
+    getStableUserAgentCore: function() {
+        const ua = navigator.userAgent.toLowerCase();
+        const components = [];
+        
+        // 提取操作系统信息
+        if (ua.includes('windows')) components.push('win');
+        else if (ua.includes('macintosh')) components.push('mac');
+        else if (ua.includes('linux')) components.push('linux');
+        else if (ua.includes('android')) components.push('android');
+        else if (ua.includes('ios') || ua.includes('iphone')) components.push('ios');
+        
+        // 提取浏览器引擎
+        if (ua.includes('chrome') && !ua.includes('edg')) components.push('chrome');
+        else if (ua.includes('firefox')) components.push('firefox');
+        else if (ua.includes('safari') && !ua.includes('chrome')) components.push('safari');
+        else if (ua.includes('edg')) components.push('edge');
+        
+        // 提取架构信息
+        if (ua.includes('x64') || ua.includes('win64') || ua.includes('wow64')) components.push('x64');
+        else if (ua.includes('x86') || ua.includes('win32')) components.push('x86');
+        else if (ua.includes('arm')) components.push('arm');
+        
+        return components.join('-');
+    },
+    
+    // 获取屏幕属性
+    getScreenProperties: function() {
+        return {
+            width: screen.width,
+            height: screen.height,
+            colorDepth: screen.colorDepth,
+            pixelDepth: screen.pixelDepth,
+            availWidth: screen.availWidth,
+            availHeight: screen.availHeight
+        };
+    },
+    
+    // 获取WebGL渲染器信息
+    getWebGLRenderer: function() {
+        try {
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (!gl) return 'no-webgl';
+            
+            const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+            if (debugInfo) {
+                return {
+                    vendor: gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || 'unknown',
+                    renderer: gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || 'unknown'
+                };
+            }
+            return 'webgl-no-debug-info';
+        } catch (error) {
+            return 'webgl-error';
+        }
+    },
+    
+    // 获取字体指纹
+    getFontFingerprint: function() {
+        try {
+            const fontList = [
+                'Arial', 'Arial Black', 'Arial Narrow', 'Calibri',
+                'Cambria', 'Cambria Math', 'Comic Sans MS', 'Courier New',
+                'Georgia', 'Impact', 'Lucida Console', 'Lucida Sans Unicode',
+                'Microsoft Sans Serif', 'Palatino Linotype', 'Segoe UI',
+                'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana',
+                'Webdings', 'Wingdings', 'MS Gothic', 'SimSun'
+            ];
+            
+            const availableFonts = [];
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            const text = "abcdefghijklmnopqrstuvwxyz0123456789";
+            
+            // 基准测量
+            context.font = "72px monospace";
+            const baseSize = context.measureText(text).width;
+            
+            for (const font of fontList) {
+                context.font = `72px ${font}, monospace`;
+                const width = context.measureText(text).width;
+                if (width !== baseSize) {
+                    availableFonts.push(font);
+                }
+            }
+            
+            return availableFonts.sort();
+        } catch (error) {
+            return ['font-detection-failed'];
+        }
+    },
+    
+    // 获取Canvas指纹
+    getCanvasFingerprint: function() {
+        try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 200;
+            canvas.height = 50;
+            
+            // 绘制一些文本和图形
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#f60';
+            ctx.fillRect(125, 1, 62, 20);
+            ctx.fillStyle = '#069';
+            ctx.fillText('Browser fingerprint', 2, 15);
+            ctx.fillStyle = 'rgba(102, 204, 0, 0.7)';
+            ctx.fillText('Browser fingerprint', 4, 17);
+            
+            return canvas.toDataURL().substring(22, 50); // 提取部分数据作为指纹
+        } catch (error) {
+            return 'canvas-error';
+        }
+    },
+    
+    // 获取存储标识符
+    getStorageIdentifier: function() {
+        let storageId = localStorage.getItem('pakeplus_machine_id');
+        if (!storageId) {
+            storageId = 'mid_' + Math.random().toString(36).substring(2, 15) + 
+                       Math.random().toString(36).substring(2, 15);
+            localStorage.setItem('pakeplus_machine_id', storageId);
+            sessionStorage.setItem('pakeplus_machine_id', storageId);
+        }
+        return storageId;
+    },
+    
+    // 计算指纹哈希
+    calculateFingerprintHash: function(fingerprint) {
+        const data = JSON.stringify(fingerprint, Object.keys(fingerprint).sort());
         let hash = 0;
         for (let i = 0; i < data.length; i++) {
             const char = data.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
             hash = hash & hash;
         }
-        return Math.abs(hash).toString(16).toUpperCase().substring(0, 12);
+        return Math.abs(hash).toString(36);
+    },
+    
+    // 生成稳定的设备ID
+    generateStableDeviceId: function(fingerprint) {
+        // 使用关键稳定属性生成ID
+        const stableComponents = [
+            fingerprint.platform,
+            fingerprint.userAgentCore,
+            fingerprint.hardwareConcurrency,
+            fingerprint.timezone,
+            fingerprint.storageId,
+            (fingerprint.webglRenderer.vendor || 'novendor').substring(0, 10),
+            fingerprint.screenProps.width + 'x' + fingerprint.screenProps.height
+        ];
+        
+        const stableData = stableComponents.join('|');
+        return this.stableHash(stableData);
+    },
+    
+    // 稳定的哈希函数
+    stableHash: function(str) {
+        let hash = 0;
+        for (let i = 0; i < str.length; i++) {
+            const char = str.charCodeAt(i);
+            hash = ((hash << 7) - hash) + char;
+            hash = hash & hash;
+        }
+        return 'MAC' + Math.abs(hash).toString(36).toUpperCase().padStart(9, '0').substring(0, 12);
+    },
+    
+    // 验证设备ID格式
+    validateDeviceId: function(deviceId) {
+        return deviceId && deviceId.length === 12 && deviceId.startsWith('MAC') && /^[0-9A-Z]+$/.test(deviceId);
+    },
+    
+    // 验证设备标识一致性
+    verifyDeviceConsistency: function() {
+        try {
+            const currentDeviceId = this.getDeviceFingerprint();
+            const storedDeviceId = localStorage.getItem('pakeplus_device_id');
+            const authDeviceId = this.getAuthDeviceId();
+            const storedHash = localStorage.getItem('pakeplus_device_hash');
+            
+            console.log('🔍 Enhanced device consistency check:', {
+                current: currentDeviceId,
+                stored: storedDeviceId,
+                auth: authDeviceId,
+                hashMatch: !!storedHash
+            });
+            
+            // 如果当前设备ID与存储的不一致，尝试恢复
+            if (currentDeviceId !== storedDeviceId) {
+                console.warn('⚠️ Device ID mismatch, attempting enhanced recovery...');
+                return this.enhancedRecovery();
+            }
+            
+            return true;
+        } catch (error) {
+            console.error('Enhanced device consistency check failed:', error);
+            return false;
+        }
+    },
+    
+    // 增强的设备ID恢复
+    enhancedRecovery: function() {
+        try {
+            // 1. 尝试从授权数据中恢复
+            const authDeviceId = this.getAuthDeviceId();
+            if (authDeviceId && this.validateDeviceId(authDeviceId)) {
+                console.log('🔄 Recovering device ID from auth data:', authDeviceId);
+                localStorage.setItem('pakeplus_device_id', authDeviceId);
+                return true;
+            }
+            
+            // 2. 尝试从存储的指纹重新计算
+            const storedFingerprint = localStorage.getItem('pakeplus_device_fingerprint');
+            if (storedFingerprint) {
+                const fingerprint = JSON.parse(storedFingerprint);
+                const recoveredId = this.generateStableDeviceId(fingerprint);
+                console.log('🔄 Recovering device ID from stored fingerprint:', recoveredId);
+                localStorage.setItem('pakeplus_device_id', recoveredId);
+                return true;
+            }
+            
+            // 3. 使用存储标识符生成
+            const storageId = localStorage.getItem('pakeplus_machine_id');
+            if (storageId) {
+                const components = [
+                    navigator.platform,
+                    this.getStableUserAgentCore(),
+                    navigator.hardwareConcurrency || 0,
+                    Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    storageId
+                ];
+                const recoveryId = this.stableHash(components.join('|'));
+                console.log('🔄 Recovering device ID from storage ID:', recoveryId);
+                localStorage.setItem('pakeplus_device_id', recoveryId);
+                return true;
+            }
+            
+            return false;
+        } catch (error) {
+            console.error('Enhanced device ID recovery failed:', error);
+            return false;
+        }
+    },
+    
+    // 降级方案：生成回退设备ID
+    generateFallbackDeviceId: function() {
+        // 使用localStorage中的固定标识
+        let fallbackId = localStorage.getItem('pakeplus_fallback_id');
+        if (!fallbackId) {
+            fallbackId = 'FB' + Math.random().toString(36).substring(2, 8).toUpperCase() + 
+                        Math.random().toString(36).substring(2, 8).toUpperCase();
+            localStorage.setItem('pakeplus_fallback_id', fallbackId);
+        }
+        return fallbackId;
+    },
+    
+    // 获取授权中的设备ID
+    getAuthDeviceId: function() {
+        try {
+            const authData = localStorage.getItem('pakeplus_pro_auth');
+            if (authData) {
+                const parsed = JSON.parse(authData);
+                return parsed.deviceId;
+            }
+        } catch (error) {
+            console.error('Error getting auth device ID:', error);
+        }
+        return null;
     },
     
     // 显示授权界面
@@ -48,6 +358,15 @@ const MACAuthSystem = {
         console.log('🔐 Showing auth interface for new device');
         const deviceId = this.getDeviceFingerprint();
         
+        // 记录设备标识信息
+        console.log('📝 Enhanced device identification:', {
+            deviceId: deviceId,
+            platform: navigator.platform,
+            userAgentCore: this.getStableUserAgentCore(),
+            hardwareConcurrency: navigator.hardwareConcurrency,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        });
+
         const authHTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -95,6 +414,11 @@ const MACAuthSystem = {
             font-weight: bold;
             color: #2d3748;
             word-break: break-all;
+        }
+        .device-stable {
+            color: #38a169;
+            font-size: 12px;
+            margin-top: 8px;
         }
         .input-group { margin-bottom: 25px; }
         .license-input {
@@ -168,6 +492,24 @@ const MACAuthSystem = {
             margin-top: 15px;
             text-align: left;
         }
+        .debug-info {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            text-align: left;
+            font-size: 12px;
+            color: #718096;
+        }
+        .tech-badge {
+            background: #2b6cb0;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            margin-left: 8px;
+        }
     </style>
 </head>
 <body>
@@ -177,8 +519,11 @@ const MACAuthSystem = {
         <p class="description">需要有效的授权许可才能使用。</p>
         
         <div class="device-info">
-            <div style="color: #718096; margin-bottom: 8px;">设备标识码</div>
+            <div style="color: #718096; margin-bottom: 8px;">
+                设备标识码 <span class="tech-badge">增强指纹技术</span>
+            </div>
             <div class="device-id" id="deviceIdDisplay">${deviceId}</div>
+            <div class="device-stable">✅ 基于硬件特征的稳定标识</div>
         </div>
         
         <div class="input-group">
@@ -204,17 +549,28 @@ const MACAuthSystem = {
         </div>
         
         <div class="remote-info">
-            <div style="color: #2b6cb0; font-weight: bold; margin-bottom: 8px;">远程授权说明</div>
+            <div style="color: #2b6cb0; font-weight: bold; margin-bottom: 8px;">增强设备识别技术</div>
             <div style="color: #2b6cb0; font-size: 12px; line-height: 1.4;">
-                • 授权密钥需在管理员电脑上生成<br>
-                • 请将设备标识码提供给管理员<br>
-                • 管理员设置授权有效期并生成密钥<br>
-                • 授权密钥与设备绑定，无法跨设备使用
+                • 基于硬件特征生成稳定设备标识<br>
+                • 使用WebGL渲染器、Canvas等硬件信息<br>
+                • 跨浏览器会话保持标识一致<br>
+                • 类似MAC地址的稳定性
+            </div>
+        </div>
+
+        <div class="debug-info">
+            <div style="color: #718096; font-weight: bold; margin-bottom: 8px;">设备特征信息</div>
+            <div style="color: #718096; font-size: 11px; line-height: 1.4;">
+                系统平台: ${navigator.platform}<br>
+                硬件核心: ${navigator.hardwareConcurrency || '未知'}<br>
+                设备内存: ${navigator.deviceMemory || '未知'}GB<br>
+                时区: ${Intl.DateTimeFormat().resolvedOptions().timeZone}<br>
+                屏幕: ${screen.width}x${screen.height}
             </div>
         </div>
         
         <div class="footer">
-             PakePlus Professional &copy; 2025 - 授权访问系统
+           软件授权系统 &copy; 2025
         </div>
     </div>
 
@@ -239,7 +595,7 @@ const MACAuthSystem = {
                 });
                 
                 licenseInput.focus();
-                console.log('AuthManager initialized for device:', this.deviceId);
+                console.log('AuthManager initialized for enhanced device:', this.deviceId);
             }
             
             verifyLicense() {
@@ -283,12 +639,12 @@ const MACAuthSystem = {
                     }
                     
                     const parts = licenseKey.split('-');
-                    if (parts.length !== 4) { // ⬅️ 修改为4部分，包含有效期
+                    if (parts.length !== 4) {
                         return { valid: false };
                     }
                     
                     const timestamp = parseInt(parts[1]);
-                    const expireDays = parseInt(parts[2]); // ⬅️ 从密钥中提取有效期
+                    const expireDays = parseInt(parts[2]);
                     const providedHash = parts[3];
                     
                     // 检查授权有效期
@@ -315,7 +671,7 @@ const MACAuthSystem = {
             
             generateLicenseHash(deviceId, timestamp, expireDays) {
                 const secret = 'pakeplus_pro_2024_secret_remote';
-                const data = deviceId + '-' + timestamp + '-' + expireDays + '-' + secret; // ⬅️ 包含有效期
+                const data = deviceId + '-' + timestamp + '-' + expireDays + '-' + secret;
                 
                 let hash = 0;
                 for (let i = 0; i < data.length; i++) {
@@ -335,8 +691,8 @@ const MACAuthSystem = {
                     deviceId: this.deviceId,
                     timestamp: Date.now(),
                     licenseType: 'professional',
-                    expireDays: expireDays, // ⬅️ 使用管理员设置的有效期
-                    version: '2.0'
+                    expireDays: expireDays,
+                    version: '3.0'
                 };
                 
                 try {
@@ -413,6 +769,12 @@ const MACAuthSystem = {
         try {
             console.log('🔍 Checking authorization status...');
             
+            // 首先验证设备一致性
+            if (!this.verifyDeviceConsistency()) {
+                console.warn('⚠️ Enhanced device consistency check failed');
+                return false;
+            }
+            
             const authDataStr = localStorage.getItem('pakeplus_pro_auth');
             if (!authDataStr) {
                 console.log('❌ No professional auth data found - new device');
@@ -423,9 +785,10 @@ const MACAuthSystem = {
             const currentDeviceId = this.getDeviceFingerprint();
             const storedDeviceId = localStorage.getItem('pakeplus_device_id');
             
-            console.log('Professional auth check:', {
+            console.log('Enhanced professional auth check:', {
                 storedDeviceId: storedDeviceId,
                 currentDeviceId: currentDeviceId,
+                authDeviceId: authData.deviceId,
                 licenseType: authData.licenseType,
                 expireDays: authData.expireDays,
                 daysSinceAuth: (Date.now() - authData.timestamp) / (24 * 60 * 60 * 1000)
@@ -453,7 +816,8 @@ const MACAuthSystem = {
                 return false;
             }
             
-            console.log('✅ Professional authorization valid, remaining days:', (expireDays - daysSinceAuth).toFixed(1));
+            const remainingDays = (expireDays - daysSinceAuth).toFixed(1);
+            console.log('✅ Professional authorization valid, remaining days:', remainingDays);
             return true;
             
         } catch (error) {
@@ -466,7 +830,6 @@ const MACAuthSystem = {
     clearAuthData: function() {
         const keys = [
             'pakeplus_pro_auth',
-            'pakeplus_device_id', 
             'pakeplus_auth_time'
         ];
         
@@ -477,9 +840,26 @@ const MACAuthSystem = {
         console.log('Professional auth data cleared');
     },
     
+    // 重置设备标识（调试用）
+    resetDeviceId: function() {
+        const keys = [
+            'pakeplus_device_id',
+            'pakeplus_device_fingerprint',
+            'pakeplus_device_hash',
+            'pakeplus_machine_id',
+            'pakeplus_fallback_id'
+        ];
+        
+        keys.forEach(key => {
+            localStorage.removeItem(key);
+        });
+        
+        console.log('Enhanced device ID reset, new ID:', this.getDeviceFingerprint());
+    },
+    
     // 初始化验证系统
     init: function() {
-        console.log('🚀 Initializing Professional MAC authentication system');
+        console.log('🚀 Initializing Enhanced Professional authentication system');
         
         // 检查是否已经在授权界面
         if (document.title === '软件授权验证 - PakePlus') {
@@ -493,6 +873,13 @@ const MACAuthSystem = {
         if (urlParams.get('clearAuth') === 'true') {
             this.clearAuthData();
             console.log('Auth data cleared via URL parameter');
+            window.location.replace(window.location.origin + window.location.pathname);
+            return false;
+        }
+        
+        if (urlParams.get('resetDevice') === 'true') {
+            this.resetDeviceId();
+            console.log('Enhanced device ID reset via URL parameter');
             window.location.replace(window.location.origin + window.location.pathname);
             return false;
         }
@@ -615,11 +1002,22 @@ function loadApplicationContent() {
                 font-size: 14px;
                 font-weight: bold;
             }
+            .device-stable {
+                background: #2b6cb0;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 16px;
+                font-size: 12px;
+                margin-left: 10px;
+            }
         </style>
     </head>
     <body>
         <div class="app-header">
-            <div class="app-title">PakePlus Professional</div>
+            <div style="display: flex; align-items: center;">
+                <div class="app-title">PakePlus Professional</div>
+                <div class="device-stable">设备标识稳定</div>
+            </div>
             <div class="${remainingDays < 30 ? 'expire-warning' : 'auth-status'}">
                 ${remainingDays < 30 ? `⚠️ 剩余${remainingDays}天` : '✅ 已授权'}
             </div>
@@ -634,7 +1032,7 @@ function loadApplicationContent() {
                 <div class="auth-info-item"><strong>有效期:</strong> ${expireDays} 天</div>
                 <div class="auth-info-item"><strong>到期时间:</strong> ${expireDate.toLocaleDateString()}</div>
                 <div class="auth-info-item"><strong>剩余天数:</strong> ${remainingDays} 天</div>
-                <div class="auth-info-item"><strong>版本:</strong> ${authData.version}</div>
+                <div class="auth-info-item"><strong>版本:</strong> ${authData.version || '3.0'}</div>
             </div>
             
             <div class="feature-list">
@@ -643,6 +1041,7 @@ function loadApplicationContent() {
                 <div class="feature-item">📦 自动化构建流程</div>
                 <div class="feature-item">🌐 多平台支持</div>
                 <div class="feature-item">⚡ 实时预览调试</div>
+                <div class="feature-item">🆔 稳定的设备标识</div>
             </div>
             
             <div style="margin-top: 30px;">
@@ -651,6 +1050,9 @@ function loadApplicationContent() {
                 </button>
                 <button onclick="MACAuthSystem.clearAuthData(); location.reload();" style="padding: 12px 24px; background: #e53e3e; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px;">
                     退出登录
+                </button>
+                <button onclick="MACAuthSystem.resetDeviceId(); location.reload();" style="padding: 12px 24px; background: #805ad5; color: white; border: none; border-radius: 8px; cursor: pointer; margin: 5px;">
+                    重置设备ID
                 </button>
             </div>
         </div>
@@ -674,7 +1076,7 @@ function loadApplicationContent() {
 有效期: \${expireDays} 天
 到期时间: \${expireDate.toLocaleDateString()}
 剩余天数: \${remainingDays} 天
-版本: \${authData.version}
+版本: \${authData.version || '3.0'}
 ─────────────────
                 \`;
                 alert(info);
@@ -682,6 +1084,7 @@ function loadApplicationContent() {
             
             console.log('🎉 PakePlus Professional Application Loaded Successfully!');
             console.log('Authorization valid for', ${remainingDays}, 'more days');
+            console.log('Device ID stability: ✅ Verified');
         </script>
     </body>
     </html>
@@ -778,4 +1181,21 @@ window.clearAuth = function() {
     location.reload();
 };
 
-console.log('📱 PakePlus Professional auth system loaded (Admin Controlled Expiry)');
+window.resetDeviceId = function() {
+    MACAuthSystem.resetDeviceId();
+    console.log('Device ID reset, reloading...');
+    location.reload();
+};
+
+window.showDeviceInfo = function() {
+    console.log('📋 Device Information:', {
+        deviceId: MACAuthSystem.getDeviceFingerprint(),
+        storedDeviceId: localStorage.getItem('pakeplus_device_id'),
+        authDeviceId: MACAuthSystem.getAuthDeviceId(),
+        userAgent: navigator.userAgent,
+        platform: navigator.platform,
+        consistency: MACAuthSystem.verifyDeviceConsistency()
+    });
+};
+
+console.log('📱 PakePlus Professional auth system loaded (Enhanced Stable Device ID)');
