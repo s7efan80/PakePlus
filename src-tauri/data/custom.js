@@ -9,13 +9,13 @@ console.log(
 // 每个应用需要修改这里的配置
 const APP_CONFIG = {
     // 应用标识符，每个应用需要设置不同的值
-    appId: "TR_Locator", // 修改为唯一的应用ID，如：pakeplus_app_1, pakeplus_app_2 等
+    appId: "EEC", // 修改为唯一的应用ID，如：pakeplus_app_1, pakeplus_app_2 等
     
     // 应用名称，用于显示在授权界面
-    appName: "TR_Locator", // 修改为实际的应用名称
+    appName: "电子工业计算器", // 修改为实际的应用名称
     
     // 应用密钥种子，每个应用不同（重要！）
-    appSecret: "TR_Locator_app_1_secret_2025", // 修改为每个应用唯一的密钥种子
+    appSecret: "EEC_app_2_secret_2025", // 修改为每个应用唯一的密钥种子
     
     // 可选：自定义数据库名称（通常不需要修改）
     dbName: "pakeplus_auth_db"
